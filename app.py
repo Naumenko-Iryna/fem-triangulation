@@ -87,5 +87,27 @@ with col1:
 
 with col2:
     st.write(f"**Вузлів:** {len(nodes)} | **Елементів:** {len(elements)}")
-    st.text_area("Вузли (ID: X, Y | Тип границі)", "\n".join([f"N{i}: ({n[0]:.2f}, {n[1]:.2f}) | {b}" for i, (n, b) in enumerate(zip(nodes, boundaries))]), height=200)
-    st.text_area("Масив зв'язності (ID: вершини)", "\n".join([f"E{i}: {e}" for i, e in enumerate(elements)]), height=200)
+    
+    # Обчислюємо кути для кожного утвореного елемента в градусах
+    element_angles = []
+    global_min_angle = 180.0
+    
+    for i, element in enumerate(elements):
+        p1, p2, p3 = nodes[element[0]], nodes[element[1]], nodes[element[2]]
+        min_rad = triangle_min_angle(p1, p2, p3)
+        min_deg = math.degrees(min_rad)
+        element_angles.append(min_deg)
+        
+        if min_deg < global_min_angle:
+            global_min_angle = min_deg
+            
+    # Виводимо глобальний мінімальний кут сітки (метрика для наочності)
+    st.metric("Найменший кут отриманої сітки", f"{global_min_angle:.2f}°")
+    
+    # Вивід детальної інформації по кожному трикутнику
+    elements_log = "\n".join([f"E{i}: {e} | Мін. кут: {element_angles[i]:.1f}°" for i, e in enumerate(elements)])
+    st.text_area("Масив зв'язності та кути", elements_log, height=200)
+    
+    # Вивід інформації про вузли
+    nodes_log = "\n".join([f"N{i}: ({n[0]:.2f}, {n[1]:.2f}) | {b}" for i, (n, b) in enumerate(zip(nodes, boundaries))])
+    st.text_area("Вузли (ID: X, Y | Тип границі)", nodes_log, height=200)
