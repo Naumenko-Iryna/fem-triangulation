@@ -2,22 +2,20 @@ import streamlit as st
 import math
 import matplotlib.pyplot as plt
 
-# --- 1. Геометричні та математичні розрахунки ---
-
 def dist(p1, p2):
-    return math.hypot(p1[0] - p2[0], p1[1] - p2[1])
+    return math.hypot(p1[0] - p2[0], p1[1] - p2[1]) # ((x1-21)^2+(y1-y2)^2)^1/2. Допоміжна функція для знаходження довжини відрізків між вузлами.
 
 def triangle_min_angle(p1, p2, p3):
-    a, b, c = dist(p2, p3), dist(p1, p3), dist(p1, p2)
+    a, b, c = dist(p2, p3), dist(p1, p3), dist(p1, p2) # розрахунок довжин сторін трикутника
     def angle(adj1, adj2, opp):
         if adj1 * adj2 == 0: return 0
-        val = max(-1.0, min(1.0, (adj1**2 + adj2**2 - opp**2) / (2 * adj1 * adj2)))
-        return math.acos(val)
+        val = max(-1.0, min(1.0, (adj1**2 + adj2**2 - opp**2) / (2 * adj1 * adj2))) # теорема косинусів але тут рахується саме кут. max і mix для попадання косинуса в діапазон від -1 до 1
+        return math.acos(val) # аркосинус повертає радіани
     return min(angle(b, c, a), angle(a, c, b), angle(a, b, c))
 
 def parse_point(text, default):
     try:
-        parts = text.replace(",", " ").split()
+        parts = text.replace(",", " ").split() # коми на пробіли, розділяємо значення
         if len(parts) >= 2:
             return float(parts[0]), float(parts[1])
     except ValueError:
@@ -27,57 +25,52 @@ def parse_point(text, default):
 def generate_mesh(nx, ny, verts, edge_types):
     nodes, node_boundaries, elements = [], [], []
     
-    # 1. Генерація координат вузлів та їх маркування
+    # Генерація координат вузлів та їх маркування
     for j in range(ny + 1):
         v = j / ny
         for i in range(nx + 1):
-            u = i / nx
-            x = (1-u)*(1-v)*verts[0][0] + u*(1-v)*verts[1][0] + u*v*verts[2][0] + (1-u)*v*verts[3][0]
-            y = (1-u)*(1-v)*verts[0][1] + u*(1-v)*verts[1][1] + u*v*verts[2][1] + (1-u)*v*verts[3][1]
+            u = i / nx # створення еталонного квадрата [0, 1]x[0, 1]. Ваги дають в сумі 1. Натягування квадрата на наш чотирикутник
+            x = (1-u)*(1-v)*verts[0][0] + u*(1-v)*verts[1][0] + u*v*verts[2][0] + (1-u)*v*verts[3][0] # ізопараметричне білінійне відображення одиничного квадрата
+            y = (1-u)*(1-v)*verts[0][1] + u*(1-v)*verts[1][1] + u*v*verts[2][1] + (1-u)*v*verts[3][1] # ваги у своїх вершинах дадуть 1, в інших 0
             nodes.append((x, y))
             
             b_mark = 0 
-            if v == 0: b_mark = edge_types[0]      # Нижня грань V1 -> V2
-            elif u == 1: b_mark = edge_types[1]    # Права грань V2 -> V3
-            elif v == 1: b_mark = edge_types[2]    # Верхня грань V3 -> V4
-            elif u == 0: b_mark = edge_types[3]    # Ліва грань V4 -> V1
+            if v == 0: b_mark = edge_types[0]      # Нижня грань V1 -> V2. Умова 2-го роду
+            elif u == 1: b_mark = edge_types[1]    # Права грань V2 -> V3. Умова 1-го роду
+            elif v == 1: b_mark = edge_types[2]    # Верхня грань V3 -> V4. Умова 2-го роду.
+            elif u == 0: b_mark = edge_types[3]    # Ліва грань V4 -> V1. Умова 3 роду.
             node_boundaries.append(b_mark)
 
-    # 2. Триангуляція з максимізацією мінімального кута (критерій Делоне)
+    # Триангуляція з максимізацією мінімального кута (критерій Делоне)
     for j in range(ny):
-        for i in range(nx):
+        for i in range(nx): # звернення до 4 вершин області. bottom-left, top-right
             bl = j * (nx + 1) + i
             br = bl + 1
             tl = (j + 1) * (nx + 1) + i
             tr = tl + 1
             
-            a1 = min(triangle_min_angle(nodes[bl], nodes[br], nodes[tr]), 
+            a1 = min(triangle_min_angle(nodes[bl], nodes[br], nodes[tr]), # діагональ bl - tr. Беремо найменший кут 
                      triangle_min_angle(nodes[bl], nodes[tr], nodes[tl]))
-            a2 = min(triangle_min_angle(nodes[bl], nodes[br], nodes[tl]), 
+            a2 = min(triangle_min_angle(nodes[bl], nodes[br], nodes[tl]), # діагональ br - tl
                      triangle_min_angle(nodes[br], nodes[tr], nodes[tl]))
             
-            if a1 >= a2:
+            if a1 >= a2: # Вибираємо той розріз де мінімальний кут виявився більшим
                 elements.extend([(bl, br, tr), (bl, tr, tl)])
             else:
                 elements.extend([(bl, br, tl), (br, tr, tl)])
                 
     return nodes, elements, node_boundaries
 
-# --- 2. Конфігурація вебінтерфейсу Streamlit ---
-
 st.set_page_config(page_title="Триангуляція Делоне (МСЕ)", layout="wide")
-st.title("Генератор сіток Делоне для МСЕ (Варіант 12)")
+st.title("Триангуляція Делоне (Варіант 12)")
 
-# Бічна панель: Параметри розбиття
 st.sidebar.header("Параметри розбиття")
 nx = st.sidebar.number_input("Густина Nx", min_value=1, max_value=25, value=2)
 ny = st.sidebar.number_input("Густина Ny", min_value=1, max_value=25, value=2)
 
-# Бічна панель: Активний контроль мінімального кута
 st.sidebar.header("Контроль якості сітки")
 angle_threshold = st.sidebar.slider("Критичний поріг кута (°)", min_value=5, max_value=45, value=20)
 
-# Бічна панель: Геометрія області (пари координат)
 st.sidebar.header("Вершини області (X, Y)")
 st.sidebar.caption("Вказуйте координати через кому або пробіл:")
 
@@ -92,9 +85,7 @@ v3 = parse_point(raw_v3, (0.0, 2.0))
 v4 = parse_point(raw_v4, (0.0, 1.0))
 
 verts = [v1, v2, v3, v4]
-b_types = [2, 1, 2, 3] # Типи границь для 12 варіанту
-
-# --- 3. Генерація та перевірка якості елементів ---
+b_types = [2, 1, 2, 3]
 
 nodes, elements, boundaries = generate_mesh(nx, ny, verts, b_types)
 
@@ -102,17 +93,15 @@ element_angles = []
 bad_elements = []
 global_min_angle = 180.0
 
-for idx, element in enumerate(elements):
-    p1, p2, p3 = nodes[element[0]], nodes[element[1]], nodes[element[2]]
-    min_deg = math.degrees(triangle_min_angle(p1, p2, p3))
+for idx, element in enumerate(elements): # idx номер трикутника, element трійка індексів вершин
+    p1, p2, p3 = nodes[element[0]], nodes[element[1]], nodes[element[2]] # витягуємо координати вузлів
+    min_deg = math.degrees(triangle_min_angle(p1, p2, p3)) # переводимо радіани в градуси
     element_angles.append(min_deg)
     
-    if min_deg < global_min_angle:
+    if min_deg < global_min_angle: # просто знаходимо мінімальний кут всієї сітки
         global_min_angle = min_deg
-    if min_deg < angle_threshold:
+    if min_deg < angle_threshold: # порівнюємо мінімальний кут з пороговим значенням
         bad_elements.append(idx)
-
-# --- 4. Візуалізація та вивід результатів ---
 
 col1, col2 = st.columns([2, 1])
 
@@ -125,13 +114,13 @@ with col1:
         xs = [p[0] for p in pts]
         ys = [p[1] for p in pts]
         
-        if idx in bad_elements:
+        if idx in bad_elements: # якщо у трикутника є кут, який порушує поріг, то він стає червоним
             ax.fill(xs, ys, color='red', alpha=0.3)
             
         pts.append(pts[0])
         ax.plot([p[0] for p in pts], [p[1] for p in pts], color='black', linewidth=0.8, alpha=0.6)
         
-        cx, cy = sum(xs)/3, sum(ys)/3
+        cx, cy = sum(xs)/3, sum(ys)/3 # знаходимо центроїд аби намалювати тут номер трикутника
         ax.text(cx, cy, f"E{idx}", color='blue', fontsize=8, ha='center', va='center', fontweight='bold')
 
     # Побудова та маркування вузлів
